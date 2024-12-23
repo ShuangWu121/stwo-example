@@ -104,7 +104,7 @@ impl StateMachineStatement1 {
     }
 }
 
-fn state_transition_info<const INDEX: usize>() -> InfoEvaluator {
+fn  state_transition_info<const INDEX: usize>() -> InfoEvaluator {
     let component = StateTransitionEval::<INDEX> {
         log_n_rows: 1,
         lookup_elements: StateMachineElements::dummy(),

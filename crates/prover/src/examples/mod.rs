@@ -1,4 +1,5 @@
 pub mod blake;
+pub mod incremental_one;
 pub mod plonk;
 pub mod poseidon;
 pub mod state_machine;
