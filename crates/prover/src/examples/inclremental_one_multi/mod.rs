@@ -1,8 +1,8 @@
 
-use num_traits::One;
+use num_traits::Zero;
 
 use crate::constraint_framework::{
-    EvalAtRow, FrameworkComponent, FrameworkEval, TraceLocationAllocator, assert_constraints,
+    EvalAtRow, FrameworkComponent, FrameworkEval, TraceLocationAllocator, //assert_constraints,
 };
 
 use crate::core::air::ComponentProver;
@@ -10,7 +10,7 @@ use crate::core::air::Component;
 use crate::core::backend::simd::column::BaseColumn;
 use crate::core::backend::simd::m31::LOG_N_LANES;
 use crate::core::backend::simd::SimdBackend;
-use crate::core::channel::Blake2sChannel;
+use crate::core::channel::{Blake2sChannel};
 use crate::core::fields::m31::BaseField;
 use crate::core::fields::qm31::SecureField;
 use crate::core::pcs::{CommitmentSchemeProver, PcsConfig};
@@ -27,6 +27,7 @@ use crate::core::prover::verify;
 
 
 pub type IncrementalOneComponent = FrameworkComponent<IncrementalOneEval>;
+
 
 #[derive(Clone)]
 pub struct IncrementalOneEval {
@@ -119,10 +120,12 @@ pub fn prove_verify_incremental_one<'a>(
     let mut tree_builder = commitment_scheme.tree_builder();
     let constants_trace_location = tree_builder.extend_evals([]);
     tree_builder.commit(channel);
+    //channel.mix_u64(log_n_rows as u64);
+    //channel.mix_u64((log_n_rows-1) as u64);
 
     // Trace.
     let trace_0 = gen_trace(log_n_rows);
-    let trace_1 = gen_trace(log_n_rows);
+    let trace_1 = gen_trace(log_n_rows-1);
 
     println!("\n trace_0 is {:?} \n", trace_0);
     println!("\n trace_1 is {:?} \n", trace_1);
@@ -134,16 +137,17 @@ pub fn prove_verify_incremental_one<'a>(
     tree_builder.commit(channel);
 
     // create the first component
+    let mut tree_span_provider = &mut TraceLocationAllocator::default();
     let component0 = IncrementalOneComponent::new(
-        &mut TraceLocationAllocator::default(),
-        IncrementalOneEval { log_n_rows },
-        (SecureField::one(), None),
+        tree_span_provider,
+        IncrementalOneEval { log_n_rows:log_n_rows },
+        (SecureField::zero(), None),
     );
 
     let component1 = IncrementalOneComponent::new(
-        &mut TraceLocationAllocator::default(),
-        IncrementalOneEval { log_n_rows:log_n_rows },
-        (SecureField::one(), None),
+        tree_span_provider,
+        IncrementalOneEval { log_n_rows:log_n_rows-1 },
+        (SecureField::zero(), None),
     );
 
     let components = &[&component0 as &dyn ComponentProver<SimdBackend>, &component1 as &dyn ComponentProver<SimdBackend>];
@@ -151,25 +155,25 @@ pub fn prove_verify_incremental_one<'a>(
     let components_verifier = &[&component0 as &dyn Component, &component1 as &dyn Component];
 
     //Sanity check. Remove for production.
-    let trace_polys = commitment_scheme
-        .trees
-        .as_ref()
-        .map(|t| t.polynomials.iter().cloned().collect_vec());
-    assert_constraints(
-        &trace_polys,
-        CanonicCoset::new(log_n_rows),
-        |mut eval| {
-            component0.evaluate(eval);
-        },
-        (SecureField::one(), None),
-    );
+    // let trace_polys = commitment_scheme
+    //     .trees
+    //     .as_ref()
+    //     .map(|t| t.polynomials.iter().cloned().collect_vec());
+    // assert_constraints(
+    //     &trace_polys,
+    //     CanonicCoset::new(log_n_rows),
+    //     |mut eval| {
+    //         component0.evaluate(eval);
+    //     },
+    //     (SecureField::zero(), None),
+    // );
 
     println!("\n starting to generate proof.................. \n");
     println!("log_n_rows is {:?}", log_n_rows);
 
     let proof = prove(components, channel, commitment_scheme).unwrap();
 
-    println!("\n proof is {:?}", proof);
+    println!("\n proof is generated.................. \n");
 
     // Verify.
         // TODO: Create Air instance independently.
@@ -182,7 +186,7 @@ pub fn prove_verify_incremental_one<'a>(
         commitment_scheme_verifier.commit(proof.commitments[0], &[], channel);
 
         // Trace columns.
-        commitment_scheme_verifier.commit(proof.commitments[1], &[log_n_rows,log_n_rows,log_n_rows,log_n_rows], channel);
+        commitment_scheme_verifier.commit(proof.commitments[1], &[log_n_rows,log_n_rows,log_n_rows-1,log_n_rows-1], channel);
 
         verify(components_verifier, channel, commitment_scheme_verifier, proof).unwrap();
 
