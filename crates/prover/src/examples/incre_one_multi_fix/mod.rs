@@ -31,6 +31,7 @@ pub type IncrementalOneComponent = FrameworkComponent<IncrementalOneEval>;
 #[derive(Clone)]
 pub struct IncrementalOneEval {
     pub log_n_rows: u32,
+    pub mask_offset: u32,
 }
 impl FrameworkEval for IncrementalOneEval {
     fn log_size(&self) -> u32 {
@@ -41,7 +42,7 @@ impl FrameworkEval for IncrementalOneEval {
     }
     fn evaluate<E: EvalAtRow>(&self, mut eval: E) -> E {
         let a_next = &eval.next_interaction_mask(1, [1])[0];
-        let b = eval.get_preprocessed_column(PreprocessedColumn::Plonk(0));
+        let b = eval.get_preprocessed_column(PreprocessedColumn::Plonk(self.mask_offset as usize));
 
         eval.add_constraint(b.clone() - a_next.clone());
 
@@ -118,7 +119,7 @@ pub fn prove_verify_incremental_one<'a>(
 
     // Trace.
     let trace_0 = gen_trace(log_n_rows);
-    let trace_1 = gen_trace(log_n_rows);
+    let trace_1 = gen_trace(log_n_rows-1);
 
     println!("\n trace_0 is {:?} \n", trace_0);
     println!("\n trace_1 is {:?} \n", trace_1);
@@ -142,13 +143,13 @@ pub fn prove_verify_incremental_one<'a>(
     let mut tree_span_provider = &mut TraceLocationAllocator::default();
     let component0 = IncrementalOneComponent::new(
         tree_span_provider,
-        IncrementalOneEval { log_n_rows:log_n_rows },
+        IncrementalOneEval { log_n_rows:log_n_rows, mask_offset:0 },
         (SecureField::zero(), None),
     );
 
     let component1 = IncrementalOneComponent::new(
         tree_span_provider,
-        IncrementalOneEval { log_n_rows:log_n_rows },
+        IncrementalOneEval { log_n_rows:log_n_rows-1, mask_offset:1 },
         (SecureField::zero(), None),
     );
 
@@ -185,10 +186,10 @@ pub fn prove_verify_incremental_one<'a>(
         // Decommit.
         // Retrieve the expected column sizes in each commitment interaction, from the AIR.
         // Preprocessed columns.
-        commitment_scheme_verifier.commit(proof.commitments[0], &[], channel);
+        commitment_scheme_verifier.commit(proof.commitments[0], &[9,8], channel);
 
         // Trace columns.
-        commitment_scheme_verifier.commit(proof.commitments[1], &[log_n_rows,log_n_rows,log_n_rows-1,log_n_rows-1], channel);
+        commitment_scheme_verifier.commit(proof.commitments[1], &[log_n_rows,log_n_rows-1], channel);
 
         verify(components_verifier, channel, commitment_scheme_verifier, proof).unwrap();
 
@@ -205,11 +206,11 @@ mod tests {
     fn test_simd_prove_multi() {
         // Get from environment variable:
         let log_n_instances = env::var("LOG_N_INSTANCES")
-            .unwrap_or_else(|_| "6".to_string())
+            .unwrap_or_else(|_| "9".to_string())
             .parse::<u32>()
             .unwrap();
         let config = PcsConfig {
-            pow_bits: 10,
+            pow_bits: 16,
             fri_config: FriConfig::new(0, 1, 100),
         };
         println!(

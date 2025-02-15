@@ -21,6 +21,7 @@ pub type IncrementalOneComponent = FrameworkComponent<IncrementalOneEval>;
 
 #[derive(Clone)]
 pub struct IncrementalOneEval {
+    //the length of the trace
     pub log_n_rows: u32,
 }
 impl FrameworkEval for IncrementalOneEval {

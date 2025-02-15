@@ -172,6 +172,7 @@ pub fn prove_verify_incremental_one<'a>(
     println!("log_n_rows is {:?}", log_n_rows);
 
     let proof = prove(components, channel, commitment_scheme).unwrap();
+    println!("proof commitment are {:?}", proof.commitments);
 
     println!("\n proof is generated.................. \n");
 
